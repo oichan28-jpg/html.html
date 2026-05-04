@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>シャモちゃんパチンコ収支帳</title>
+
+  <!-- PWA -->
+  <meta name="application-name" content="シャモちゃん収支帳" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="収支帳" />
+  <meta name="theme-color" content="#0d0d1a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" id="pwa-manifest" />
+
+  <!-- PWA Icons (inline SVG → data URI) -->
+  <link rel="apple-touch-icon" id="pwa-icon-link" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0d1a;
+      color: #fff;
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Helvetica Neue', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+    }
+    #app {
+      width: 100%;
+      max-width: 420px;
+      min-height: 100vh;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 80px #00ffaa11;
+      background: #0d0d1a;
+    }
+    .bg-noise {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, #1a0a2e55 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 80%, #0a1a2e44 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 16px 14px;
+      border-bottom: 1px solid #ffffff0a;
+      background: linear-gradient(180deg, #13132a 0%, #0d0d1a 100%);
+      position: relative;
+      z-index: 10;
+    }
+    .header-title { display: flex; align-items: baseline; gap: 6px; }
+    .crown { font-size: 16px; color: #ddaa44; }
+    .header-name {
+      font-size: 18px; font-weight: 900;
+      background: linear-gradient(90deg, #00ffaa, #44aaff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header-sub { font-size: 10px; color: #555; letter-spacing: 1px; }
+    .header-total { display: flex; align-items: baseline; }
+    .total-val { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+    .total-label { color: #888; font-size: 11px; margin-left: 6px; }
+
+    /* Content */
+    .content { flex: 1; overflow-y: auto; position: relative; z-index: 1; padding-bottom: 80px; }
+
+    /* Nav */
+    nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      background: #13132a;
+      border-top: 1px solid #ffffff0a;
+      z-index: 100;
+    }
+    .nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 10px 0;
+      background: none;
+      border: none;
+      color: #555;
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.2s;
+      font-size: 10px;
+    }
+    .nav-btn .icon { font-size: 20px; }
+    .nav-btn.active { color: #00ffaa; }
+
+    /* Cards */
+    .big-card {
+      background: linear-gradient(135deg, #13132a 0%, #1a1a35 100%);
+      border: 1px solid #ffffff0a;
+      border-radius: 16px;
+      padding: 20px 20px 18px;
+      margin-bottom: 14px;
+    }
+    .card {
+      background: #13132a;
+      border: 1px solid #ffffff08;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .record-card {
+      background: #13132a;
+      border: 1px solid #ffffff08;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+
+    /* Tabs */
+    .tab { display: none; padding: 16px 14px 10px; }
+    .tab.active { display: block; }
+
+    /* Stats row */
+    .stats-row { display: flex; gap: 20px; margin-top: 12px; }
+    .stat-label { color: #777; font-size: 10px; }
+    .stat-val { font-size: 14px; font-weight: 700; }
+
+    /* Two col */
+    .two-col { display: flex; gap: 10px; margin-bottom: 14px; }
+    .two-col .card { flex: 1; margin-bottom: 0; }
+
+    /* Bar chart */
+    .bar-row { display: flex; align-items: center; margin-bottom: 8px; }
+    .bar-label { color: #aaa; font-size: 12px; width: 70px; }
+    .bar-track { flex: 1; background: #1a1a2e; border-radius: 4px; height: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; min-width: 4px; }
+    .bar-val { font-size: 13px; font-weight: 700; width: 100px; text-align: right; }
+
+    /* Form */
+    label.field-label {
+      display: block;
+      color: #777;
+      font-size: 11px;
+      margin-bottom: 5px;
+      margin-top: 12px;
+      letter-spacing: 1px;
+    }
+    input, textarea {
+      width: 100%;
+      background: #1a1a2e;
+      border: 1px solid #ffffff14;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #fff;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+    }
+    textarea { height: 70px; resize: none; }
+    .two-input { display: flex; gap: 10px; }
+    .two-input > div { flex: 1; }
+
+    /* Buttons */
+    .btn-main {
+      width: 100%;
+      background: linear-gradient(90deg, #00cc88, #0088cc);
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-top: 8px;
+      font-family: inherit;
+      letter-spacing: 1px;
+      opacity: 1;
+      transition: opacity 0.2s;
+    }
+    .btn-main:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost {
+      width: 100%;
+      background: none;
+      border: 1px solid #ffffff22;
+      border-radius: 10px;
+      padding: 12px;
+      color: #888;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 8px;
+      font-family: inherit;
+    }
+    .btn-small {
+      background: none;
+      border: 1px solid #ffffff22;
+      border-radius: 6px;
+      padding: 4px 12px;
+      color: #aaa;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-small.danger { color: #ff4466; border-color: #ff446644; }
+    .btn-small.confirm { background: #ff4466; color: #fff; border-color: #ff4466; }
+
+    /* Profit preview */
+    .profit-preview {
+      text-align: center;
+      margin-bottom: 14px;
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: #13132a;
+      border: 1px solid #ffffff22;
+    }
+
+    /* Record row */
+    .record-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .record-machine { color: #ddd; font-weight: 700; font-size: 15px; }
+    .record-date { color: #666; font-size: 11px; margin-top: 2px; }
+    .record-profit { font-weight: 800; font-size: 20px; }
+    .record-detail { display: flex; gap: 14px; margin-top: 6px; }
+    .record-invest { color: #ff8866; font-size: 11px; }
+    .record-payout { color: #66aaff; font-size: 11px; }
+    .record-memo { color: #777; font-size: 11px; margin-top: 4px; font-style: italic; }
+    .record-btns { display: flex; gap: 8px; margin-top: 10px; }
+
+    /* Empty */
+    .empty { text-align: center; color: #555; margin-top: 60px; font-size: 14px; }
+    .empty .big-icon { font-size: 40px; margin-bottom: 10px; }
+
+    /* Section label */
+    .section-label { color: #aaa; font-size: 13px; margin-bottom: 16px; font-weight: 600; letter-spacing: 2px; }
+
+    /* Install tab */
+    .os-btn {
+      flex: 1; padding: 8px 4px; background: #13132a;
+      border: 1px solid #ffffff14; border-radius: 8px;
+      color: #666; font-size: 12px; cursor: pointer; font-family: inherit;
+      transition: all 0.2s;
+    }
+    .os-btn.active { background: #1a1a35; border-color: #00ffaa66; color: #00ffaa; font-weight: 700; }
+    .step-card {
+      display: flex; align-items: flex-start; gap: 14px;
+      background: #13132a; border: 1px solid #ffffff08;
+      border-radius: 12px; padding: 14px; margin-bottom: 10px;
+    }
+    .step-num {
+      min-width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, #00cc88, #0088cc);
+      color: #fff; font-weight: 900; font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-title { color: #ddd; font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    .step-desc { color: #888; font-size: 12px; line-height: 1.6; }
+    .tip-box {
+      background: #1a1a2e; border: 1px solid #ddaa4433;
+      border-radius: 10px; padding: 12px 14px;
+      color: #ddaa44; font-size: 12px; margin-top: 4px; line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+<div class="bg-noise"></div>
+<div id="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-title">
+      <span class="crown">♛</span>
+      <span class="header-name">シャモちゃん</span>
+      <span class="header-sub">パチンコ収支帳</span>
+    </div>
+    <div class="header-total">
+      <span class="total-val" id="header-total">¥0</span>
+      <span class="total-label">通算収支</span>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <!-- Home Tab -->
+    <div class="tab active" id="tab-home">
+      <div class="big-card">
+        <div style="color:#888;font-size:12px;margin-bottom:4px">通算収支</div>
+        <div id="home-total" style="font-size:44px;font-weight:900;letter-spacing:-1px;line-height:1;color:#aaa">¥0</div>
+        <div class="stats-row">
+          <div><div class="stat-label">総投資</div><div class="stat-val" id="home-invest" style="color:#ff8866">¥0</div></div>
+          <div><div class="stat-label">総払出</div><div class="stat-val" id="home-payout" style="color:#66aaff">¥0</div></div>
+          <div><div class="stat-label">実績</div><div class="stat-val" id="home-count" style="color:#ddaa44">0回</div></div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div style="color:#888;font-size:11px">勝率</div>
+          <div id="home-winrate" style="color:#00ffaa;font-size:28px;font-weight:800">0%</div>
+          <div id="home-wl" style="font-size:11px;color:#888">0勝 0敗</div>
+        </div>
+        <div class="card">
+          <div style="color:#888;font-size:11px">最高収支</div>
+          <div id="home-best" style="color:#00ffaa;font-size:22px;font-weight:800">—</div>
+          <div id="home-worst" style="color:#888;font-size:11px">最低: —</div>
+        </div>
+      </div>
+      <div class="card" id="monthly-card" style="display:none">
+        <div style="color:#888;font-size:12px;margin-bottom:10px">月別収支</div>
+        <div id="monthly-list"></div>
+      </div>
+      <div class="empty" id="home-empty">
+        <div class="big-icon">🎰</div>
+        まだ記録がありません<br>「入力」から収支を追加してね！
+      </div>
+    </div>
+
+    <!-- Add Tab -->
+    <div class="tab" id="tab-add" style="padding:16px 14px">
+      <div class="section-label" id="add-title">＋ 収支を入力</div>
+      <label class="field-label">日付</label>
+      <input type="date" id="f-date" />
+      <label class="field-label">台名・機種名</label>
+      <input type="text" id="f-machine" placeholder="例：北斗無双、エヴァ15 etc." />
+      <div class="two-input">
+        <div>
+          <label class="field-label">投資額（円）</label>
+          <input type="number" id="f-invest" placeholder="0" />
+        </div>
+        <div>
+          <label class="field-label">払出額（円）</label>
+          <input type="number" id="f-payout" placeholder="0" />
+        </div>
+      </div>
+      <div class="profit-preview" id="profit-preview" style="display:none">
+        <div style="color:#888;font-size:11px">収支</div>
+        <div id="profit-val" style="font-size:32px;font-weight:900"></div>
+      </div>
+      <label class="field-label">メモ（任意）</label>
+      <textarea id="f-memo" placeholder="感想、状況など..."></textarea>
+      <button class="btn-main" id="submit-btn" disabled>記録する 🎰</button>
+      <button class="btn-ghost" id="cancel-edit-btn" style="display:none">キャンセル</button>
+    </div>
+
+    <!-- History Tab -->
+    <div class="tab" id="tab-history" style="padding:16px 14px">
+      <div class="section-label">≡ 収支履歴</div>
+      <div id="history-empty" class="empty" style="display:none">
+        <div style="font-size:36px">📋</div>記録がありません
+      </div>
+      <div id="history-list"></div>
+    </div>
+
+    <!-- Install Tab -->
+    <div class="tab" id="tab-install" style="padding:16px 14px">
+      <div class="section-label">📲 ホーム画面に追加</div>
+
+      <!-- OS selector -->
+      <div style="display:flex;gap:8px;margin-bottom:18px;">
+        <button class="os-btn active" data-os="ios" onclick="showOS('ios')">🍎 iPhone</button>
+        <button class="os-btn" data-os="android" onclick="showOS('android')">🤖 Android</button>
+        <button class="os-btn" data-os="pc" onclick="showOS('pc')">💻 PC</button>
+      </div>
+
+      <!-- iOS -->
+      <div class="os-panel" id="os-ios">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div>
+            <div class="step-title">Safariで開く</div>
+            <div class="step-desc">このファイルをSafariブラウザで開いてください。（ChromeではNG）</div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div>
+            <div class="step-title">共有ボタンをタップ</div>
+            <div class="step-desc">画面下中央の <span style="font-size:16px">⎋</span> （四角から矢印が出ているアイコン）をタップ</div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div>
+            <div class="step-title">「ホーム画面に追加」を選ぶ</div>
+            <div class="step-desc">メニューをスクロールして「ホーム画面に追加」をタップ</div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">4</div>
+          <div>
+            <div class="step-title">「追加」をタップ</div>
+            <div class="step-desc">右上の「追加」をタップすれば完了！ホーム画面にアイコンが現れます🎰</div>
+          </div>
+        </div>
+        <div class="tip-box">💡 iOS 16.4以降はPWA対応。アプリっぽく全画面で起動します！</div>
+      </div>
+
+      <!-- Android -->
+      <div class="os-panel" id="os-android" style="display:none">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div>
+            <div class="step-title">Chromeで開く</div>
+            <div class="step-desc">このHTMLファイルをGoogle Chromeで開いてください</div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div>
+            <div class="step-title">メニューを開く</div>
+            <div class="step-desc">右上の「⋮」（3点メニュー）をタップ</div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div>
+            <div class="step-title">「ホーム画面に追加」をタップ</div>
+            <div class="step-desc">メニューの中の「ホーム画面に追加」を選択</div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">4</div>
+          <div>
+            <div class="step-title">「追加」をタップ</div>
+            <div class="step-desc">確認ダイアログで「追加」をタップして完了🎰</div>
+          </div>
+        </div>
+        <div class="tip-box">💡 アドレスバーにインストールアイコンが出ることもあります</div>
+      </div>
+
+      <!-- PC -->
+      <div class="os-panel" id="os-pc" style="display:none">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div>
+            <div class="step-title">Chrome / Edgeで開く</div>
+            <div class="step-desc">このHTMLファイルをChromeまたはEdgeで開いてください</div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div>
+            <div class="step-title">アドレスバーのアイコンをクリック</div>
+            <div class="step-desc">URLバー右端に <strong style="color:#00ffaa">⊕</strong> インストールアイコンが表示されます</div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div>
+            <div class="step-title">「インストール」をクリック</div>
+            <div class="step-desc">ダイアログの「インストール」をクリックで完了！デスクトップアプリとして起動します🎰</div>
+          </div>
+        </div>
+        <div class="tip-box">💡 出ない場合はメニュー「⋮」→「アプリとして保存」でも同じことができます</div>
+      </div>
+    </div>
+  </div><!-- /content -->
+
+  <!-- Nav -->
+  <nav>
+    <button class="nav-btn active" data-tab="home">
+      <span class="icon">◉</span>ホーム
+    </button>
+    <button class="nav-btn" data-tab="add">
+      <span class="icon">＋</span>入力
+    </button>
+    <button class="nav-btn" data-tab="history">
+      <span class="icon">≡</span>履歴
+    </button>
+    <button class="nav-btn" data-tab="install">
+      <span class="icon">📲</span>追加
+    </button>
+  </nav>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────
+  const STORAGE_KEY = 'shamo_pachinko_v1';
+  let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  let editId = null;
+  let deleteConfirmId = null;
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  // ── Helpers ────────────────────────────────────────
+  function fmtYen(n) {
+    return n >= 0 ? `+¥${Math.abs(n).toLocaleString()}` : `-¥${Math.abs(n).toLocaleString()}`;
+  }
+  function color(n) {
+    return n > 0 ? '#00ffaa' : n < 0 ? '#ff4466' : '#aaaaaa';
+  }
+  function today() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  // ── Tab switching ──────────────────────────────────
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.tab;
+      if (t === 'add' && editId !== null) { cancelEdit(); }
+      switchTab(t);
+    });
+  });
+
+  function switchTab(t) {
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + t).classList.add('active');
+    document.querySelector(`.nav-btn[data-tab="${t}"]`).classList.add('active');
+    if (t === 'home') renderHome();
+    if (t === 'history') renderHistory();
+  }
+
+  // ── Home ───────────────────────────────────────────
+  function renderHome() {
+    const totalProfit = records.reduce((s, r) => s + (r.payout - r.invest), 0);
+    const totalInvest = records.reduce((s, r) => s + r.invest, 0);
+    const totalPayout = records.reduce((s, r) => s + r.payout, 0);
+    const wins = records.filter(r => r.payout - r.invest > 0).length;
+    const loses = records.filter(r => r.payout - r.invest < 0).length;
+    const rate = records.length ? Math.round(wins / records.length * 100) : 0;
+
+    // Header
+    const htEl = document.getElementById('header-total');
+    htEl.textContent = records.length ? fmtYen(totalProfit) : '¥0';
+    htEl.style.color = records.length ? color(totalProfit) : '#aaa';
+
+    // Big card
+    const htHome = document.getElementById('home-total');
+    htHome.textContent = records.length ? fmtYen(totalProfit) : '¥0';
+    htHome.style.color = records.length ? color(totalProfit) : '#aaa';
+    document.getElementById('home-invest').textContent = '¥' + totalInvest.toLocaleString();
+    document.getElementById('home-payout').textContent = '¥' + totalPayout.toLocaleString();
+    document.getElementById('home-count').textContent = records.length + '回';
+
+    document.getElementById('home-winrate').textContent = rate + '%';
+    document.getElementById('home-wl').textContent = `${wins}勝 ${loses}敗`;
+
+    // Best/worst
+    if (records.length) {
+      const profits = records.map(r => r.payout - r.invest);
+      const best = Math.max(...profits);
+      const worst = Math.min(...profits);
+      const bEl = document.getElementById('home-best');
+      bEl.textContent = fmtYen(best);
+      bEl.style.color = color(best);
+      document.getElementById('home-worst').textContent = '最低: ' + fmtYen(worst);
+    } else {
+      document.getElementById('home-best').textContent = '—';
+      document.getElementById('home-worst').textContent = '最低: —';
+    }
+
+    // Empty
+    document.getElementById('home-empty').style.display = records.length ? 'none' : 'block';
+
+    // Monthly
+    const monthMap = {};
+    records.forEach(r => {
+      const m = r.date.slice(0, 7);
+      if (!monthMap[m]) monthMap[m] = 0;
+      monthMap[m] += r.payout - r.invest;
+    });
+    const months = Object.entries(monthMap).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 6);
+    const mc = document.getElementById('monthly-card');
+    mc.style.display = months.length ? 'block' : 'none';
+    const ml = document.getElementById('monthly-list');
+    ml.innerHTML = '';
+    months.forEach(([m, v]) => {
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      const pct = Math.min(100, Math.abs(v) / 1000 * 5);
+      row.innerHTML = `
+        <div class="bar-label">${m}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(pct,2)}%;background:${v >= 0 ? '#00ffaa' : '#ff4466'}"></div></div>
+        <div class="bar-val" style="color:${color(v)}">${fmtYen(v)}</div>
+      `;
+      ml.appendChild(row);
+    });
+  }
+
+  // ── Add / Edit ─────────────────────────────────────
+  function resetForm() {
+    document.getElementById('f-date').value = today();
+    document.getElementById('f-machine').value = '';
+    document.getElementById('f-invest').value = '';
+    document.getElementById('f-payout').value = '';
+    document.getElementById('f-memo').value = '';
+    document.getElementById('profit-preview').style.display = 'none';
+    document.getElementById('submit-btn').disabled = true;
+  }
+
+  function validateForm() {
+    const m = document.getElementById('f-machine').value.trim();
+    const i = document.getElementById('f-invest').value;
+    const p = document.getElementById('f-payout').value;
+    document.getElementById('submit-btn').disabled = !(m && i !== '' && p !== '');
+    // Preview
+    if (i !== '' && p !== '') {
+      const profit = Number(p) - Number(i);
+      const prev = document.getElementById('profit-preview');
+      prev.style.display = 'block';
+      prev.style.borderColor = color(profit) + '44';
+      const pv = document.getElementById('profit-val');
+      pv.textContent = fmtYen(profit);
+      pv.style.color = color(profit);
+    } else {
+      document.getElementById('profit-preview').style.display = 'none';
+    }
+  }
+
+  ['f-machine', 'f-invest', 'f-payout'].forEach(id => {
+    document.getElementById(id).addEventListener('input', validateForm);
+  });
+
+  document.getElementById('submit-btn').addEventListener('click', () => {
+    const rec = {
+      date: document.getElementById('f-date').value,
+      machine: document.getElementById('f-machine').value.trim(),
+      invest: Number(document.getElementById('f-invest').value),
+      payout: Number(document.getElementById('f-payout').value),
+      memo: document.getElementById('f-memo').value.trim(),
+    };
+    if (editId !== null) {
+      records = records.map(r => r.id === editId ? { ...rec, id: editId } : r);
+      editId = null;
+    } else {
+      rec.id = Date.now();
+      records.unshift(rec);
+    }
+    save();
+    resetForm();
+    document.getElementById('add-title').textContent = '＋ 収支を入力';
+    document.getElementById('submit-btn').textContent = '記録する 🎰';
+    document.getElementById('cancel-edit-btn').style.display = 'none';
+    switchTab('history');
+  });
+
+  document.getElementById('cancel-edit-btn').addEventListener('click', cancelEdit);
+
+  function cancelEdit() {
+    editId = null;
+    resetForm();
+    document.getElementById('add-title').textContent = '＋ 収支を入力';
+    document.getElementById('submit-btn').textContent = '記録する 🎰';
+    document.getElementById('cancel-edit-btn').style.display = 'none';
+    switchTab('history');
+  }
+
+  function startEdit(id) {
+    const r = records.find(x => x.id === id);
+    if (!r) return;
+    editId = id;
+    document.getElementById('f-date').value = r.date;
+    document.getElementById('f-machine').value = r.machine;
+    document.getElementById('f-invest').value = r.invest;
+    document.getElementById('f-payout').value = r.payout;
+    document.getElementById('f-memo').value = r.memo || '';
+    document.getElementById('add-title').textContent = '✏ 記録を編集';
+    document.getElementById('submit-btn').textContent = '更新する';
+    document.getElementById('cancel-edit-btn').style.display = 'block';
+    validateForm();
+    switchTab('add');
+  }
+
+  // ── History ────────────────────────────────────────
+  function renderHistory() {
+    const list = document.getElementById('history-list');
+    const empty = document.getElementById('history-empty');
+    const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
+
+    if (sorted.length === 0) {
+      list.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    list.innerHTML = '';
+
+    sorted.forEach(r => {
+      const profit = r.payout - r.invest;
+      const div = document.createElement('div');
+      div.className = 'record-card';
+      div.innerHTML = `
+        <div class="record-top">
+          <div>
+            <div class="record-machine">${escHtml(r.machine)}</div>
+            <div class="record-date">${r.date}</div>
+          </div>
+          <div class="record-profit" style="color:${color(profit)}">${fmtYen(profit)}</div>
+        </div>
+        <div class="record-detail">
+          <span class="record-invest">投資 ¥${r.invest.toLocaleString()}</span>
+          <span class="record-payout">払出 ¥${r.payout.toLocaleString()}</span>
+        </div>
+        ${r.memo ? `<div class="record-memo">${escHtml(r.memo)}</div>` : ''}
+        <div class="record-btns" id="btns-${r.id}">
+          <button class="btn-small" onclick="startEdit(${r.id})">編集</button>
+          <button class="btn-small danger" onclick="askDelete(${r.id})">削除</button>
+        </div>
+      `;
+      list.appendChild(div);
+    });
+  }
+
+  function askDelete(id) {
+    deleteConfirmId = id;
+    const btns = document.getElementById('btns-' + id);
+    btns.innerHTML = `
+      <button class="btn-small confirm" onclick="doDelete(${id})">削除する</button>
+      <button class="btn-small" onclick="renderHistory()">キャンセル</button>
+    `;
+  }
+
+  function doDelete(id) {
+    records = records.filter(r => r.id !== id);
+    save();
+    renderHistory();
+    renderHome();
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Init ───────────────────────────────────────────
+  resetForm();
+  renderHome();
+  renderHistory();
+
+  // ── OS Selector ────────────────────────────────────
+  function showOS(os) {
+    document.querySelectorAll('.os-panel').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('os-' + os).style.display = 'block';
+    document.querySelector(`.os-btn[data-os="${os}"]`).classList.add('active');
+  }
+
+  // Auto-detect OS on load
+  (function() {
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod/.test(ua)) showOS('ios');
+    else if (/Android/.test(ua)) showOS('android');
+    else showOS('pc');
+  })();
+</script>
+</body>
+</html>
